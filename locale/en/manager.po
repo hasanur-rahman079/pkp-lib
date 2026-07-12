@@ -426,6 +426,18 @@ msgstr "The review reminder details have been updated."
 msgid "manager.dois.title"
 msgstr "DOIs"
 
+msgid "manager.dois.landingPageUrl"
+msgstr "Landing Page URL"
+
+msgid "manager.dois.landingPageUrlPlaceholder"
+msgstr "Custom landing page URL (optional)"
+
+msgid "manager.dois.fullTextUrl"
+msgstr "Full Text URL"
+
+msgid "manager.dois.fullTextUrlPlaceholder"
+msgstr "Custom full text URL for similarity check (optional)"
+
 msgid "manager.dois.registrationAgency.errorMessagePreamble"
 msgstr ""
 "The following error was returned by {$registrationAgency} and contains "
