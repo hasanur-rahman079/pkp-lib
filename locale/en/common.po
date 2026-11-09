@@ -818,7 +818,7 @@ msgid "common.replaceFile"
 msgstr "Replace file"
 
 msgid "common.requiredField"
-msgstr "Required fields are marked with an asterisk: <abbr class=\"required\" title=\"required\">*</abbr>"
+msgstr "Required fields are marked with an asterisk: <span class=\"required\" aria-hidden=\"true\">*</span>"
 
 msgid "common.required"
 msgstr "Required"
@@ -2107,12 +2107,6 @@ msgstr "Expand all"
 
 msgid "list.collapseAll"
 msgstr "Collapse all"
-
-msgid "showAll"
-msgstr "Show All"
-
-msgid "showLess"
-msgstr "Show Less"
 
 msgid "validation.invalidOption"
 msgstr "This is not a valid option."

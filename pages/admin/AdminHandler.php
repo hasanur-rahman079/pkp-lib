@@ -269,6 +269,7 @@ class AdminHandler extends Handler
             'languages' => true,
             'bulkEmails' => true,
             'statistics' => true,
+            'orcidSiteSettings' => true,
             'siteAppearance' => $isMultiContextSite,
             'sitePlugins' => $isMultiContextSite,
             'siteConfig' => $isMultiContextSite,
@@ -278,7 +279,6 @@ class AdminHandler extends Handler
             'siteTheme' => $isMultiContextSite,
             'siteAppearanceSetup' => $isMultiContextSite,
             'announcements' => $isMultiContextSite,
-            'orcidSiteSettings' => $isMultiContextSite,
         ];
     }
 
@@ -525,7 +525,7 @@ class AdminHandler extends Handler
         $templateMgr->assign([
             'pageComponent' => 'Page',
             'breadcrumbs' => $breadcrumbs,
-            'pageTitle' => 'navigation.tools.jobs',
+            'pageTitle' => __('navigation.tools.jobs'),
         ]);
 
         $templateMgr->display('admin/jobs.tpl');
@@ -593,7 +593,7 @@ class AdminHandler extends Handler
         $templateMgr->assign([
             'pageComponent' => 'Page',
             'breadcrumbs' => $breadcrumbs,
-            'pageTitle' => 'navigation.tools.jobs.failed',
+            'pageTitle' => __('navigation.tools.jobs.failed'),
         ]);
 
         $templateMgr->display('admin/failedJobs.tpl');
@@ -702,7 +702,7 @@ class AdminHandler extends Handler
         $templateMgr->assign([
             'pageComponent' => 'Page',
             'breadcrumbs' => $breadcrumbs,
-            'pageTitle' => 'navigation.tools.jobs.failed.details',
+            'pageTitle' => __('navigation.tools.jobs.failed.details'),
         ]);
 
         $templateMgr->display('admin/failedJobDetails.tpl');

@@ -361,6 +361,14 @@ class PKPRequest
     }
 
     /**
+     * Get the CGI PATH_INFO of the current request, e.g. "/context/locale/page/op".
+     */
+    public function getPathInfo(): string
+    {
+        return $_SERVER['PATH_INFO'] ?? '';
+    }
+
+    /**
      * Get the server hostname in the request.
      *
      * @param $default Default hostname (defaults to localhost if null)
@@ -579,7 +587,7 @@ class PKPRequest
 
         // Attempts to retrieve a logged user
         if (Validation::isLoggedIn()) {
-            $user = Repo::user()->get($this->getSessionGuard()->getUserId());
+            $user = Repo::user()->get($this->getSessionGuard()->getUserId(), true);
         }
 
         return $user;
@@ -785,6 +793,23 @@ class PKPRequest
                 ? $publicFileManager->getContextFilesPath($context->getId())
                 : $publicFileManager->getSiteFilesPath()
         ]);
+    }
+
+    /**
+     * Get the path of the referer URL.
+     *
+     * @return string|null The referer path along with any available query params, or null if the referer is not set.
+     */
+    public function getRefererPath(): ?string
+    {
+        $referer = $_SERVER['HTTP_REFERER'] ?? null;
+        if (!$referer) {
+            return null;
+        }
+
+        $path = parse_url($referer, PHP_URL_PATH);
+        $query = parse_url($referer, PHP_URL_QUERY);
+        return $query ? $path . '?' . $query : $path;
     }
 }
 

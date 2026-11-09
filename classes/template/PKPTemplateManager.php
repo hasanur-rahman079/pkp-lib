@@ -327,6 +327,7 @@ class PKPTemplateManager extends Smarty
         }
 
         // Register custom functions
+        $this->registerPlugin('modifier', 'date', date(...));
         $this->registerPlugin('modifier', 'in_array', in_array(...));
         $this->registerPlugin('modifier', 'trim', trim(...));
         $this->registerPlugin('modifier', 'date_format', $this->smartyDateFormat(...));
@@ -509,7 +510,7 @@ class PKPTemplateManager extends Smarty
 
         // Set the @baseUrl variable
         $baseUrl = !empty($args['baseUrl']) ? $args['baseUrl'] : $request->getBaseUrl(true);
-        $less->parse("@baseUrl: '{$baseUrl}';");
+        $less->parse('@baseUrl: ' . json_encode($baseUrl) . ';');
 
         return $less->getCSS();
     }

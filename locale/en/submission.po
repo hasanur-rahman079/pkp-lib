@@ -48,14 +48,14 @@ msgstr "A ROR name is required."
 msgid "ror.displayLocaleRequired"
 msgstr "ROR display locale is required."
 
+msgid "ror.invalidRorId"
+msgstr "Please provide a valid ROR ID."
+
 msgid "submission.authors.label"
 msgstr "Authors"
 
 msgid "submission.submit.availableUserGroups"
 msgstr "Submit As"
-
-msgid "submission.authors.label"
-msgstr "Authors"
 
 msgid "submission.author.list"
 msgstr "Submission Author List"
@@ -2628,7 +2628,7 @@ msgid "dashboard.reviewAssignment.statusReviewOverdue.title"
 msgstr "Review overdue by {$days} days"
 
 msgid "dashboard.reviewAssignment.statusReviewOverdue.description"
-msgstr "This reviewer has not completed their review. A response was due on <b>{$date}.</b>"
+msgstr "This reviewer has not completed their review. The review was due on <b>{$date}</b>."
 
 msgid "dashboard.reviewAssignment.statusReceived.title"
 msgstr "Review completed on {$date}"
@@ -2646,10 +2646,10 @@ msgid "dashboard.reviewAssignment.statusComplete.description"
 msgstr "The review was accepted by the editor on <b>{$date}</b>."
 
 msgid "dashboard.reviewAssignment.statusCancelled.title"
-msgstr "Reviewer cancelled review request"
+msgstr "Review request cancelled by editor"
 
 msgid "dashboard.reviewAssignment.statusCancelled.description"
-msgstr "Reviewer has cancelled the review request on <b>{$date}</b>."
+msgstr "The editor cancelled this review request on <b>{$date}</b>."
 
 msgid "dashboard.reviewAssignment.statusRequestResend.title"
 msgstr "Awaiting Response from the reviewer"
@@ -2776,3 +2776,6 @@ msgstr "Delete Incomplete Submissions"
 
 msgid "reviewer.competingInterests"
 msgstr "Competing Interests"
+
+msgid "publication.publish.warning"
+msgstr "The following issues were found, but will not prevent publishing"

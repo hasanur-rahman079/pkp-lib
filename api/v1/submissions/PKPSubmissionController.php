@@ -42,6 +42,7 @@ use PKP\components\forms\publication\PKPPublicationLicenseForm;
 use PKP\components\forms\publication\TitleAbstractForm;
 use PKP\components\forms\submission\ChangeSubmissionLanguageMetadataForm;
 use PKP\context\Context;
+use PKP\core\exceptions\StoreTemporaryFileException;
 use PKP\core\Core;
 use PKP\core\PKPApplication;
 use PKP\core\PKPBaseController;
@@ -72,7 +73,6 @@ use PKP\services\PKPSchemaService;
 use PKP\stageAssignment\StageAssignment;
 use PKP\submission\GenreDAO;
 use PKP\submission\PKPSubmission;
-use PKP\submission\reviewAssignment\ReviewAssignment;
 use PKP\submissionFile\SubmissionFile;
 use PKP\userGroup\UserGroup;
 
@@ -144,6 +144,20 @@ class PKPSubmissionController extends PKPBaseController
         Role::ROLE_ID_MANAGER,
         Role::ROLE_ID_SUB_EDITOR,
         Role::ROLE_ID_ASSISTANT
+    ];
+
+    /** @var string[] ORCID properties that should not be written or edited as part of contributor editor process */
+    public array $orcidWriteForbiddenProps = [
+        'orcidIsVerified',
+        'orcidSandbox',
+        'orcidAccessToken',
+        'orcidAccessScope',
+        'orcidRefreshToken',
+        'orcidAccessExpiresOn',
+        'orcidAccessDenied',
+        'orcidEmailToken',
+        'orcidWorkPutCode',
+        'orcidVerificationRequested',
     ];
 
     /**
@@ -432,7 +446,8 @@ class PKPSubmissionController extends PKPBaseController
 
         $submissions = $collector->getMany();
 
-        $anonymizeReviews = $this->anonymizeReviews($submissions);
+        $reviewsToAnonymize = $this->reviewsToAnonymize($submissions);
+        $submissionsToAnonymizeByAuthor = $this->submissionsToAnonymizeByAuthor($submissions);
 
         $userGroups = UserGroup::withContextIds($context->getId())->cursor();
 
@@ -442,7 +457,15 @@ class PKPSubmissionController extends PKPBaseController
 
         return response()->json([
             'itemsMax' => $collector->getCount(),
-            'items' => Repo::submission()->getSchemaMap()->summarizeMany($submissions, $userGroups, $genres, $anonymizeReviews)->values(),
+            'items' => Repo::submission()
+                ->getSchemaMap()
+                ->summarizeMany(
+                    $submissions,
+                    $userGroups,
+                    $genres,
+                    $reviewsToAnonymize,
+                    $submissionsToAnonymizeByAuthor,
+                )->values(),
         ], Response::HTTP_OK);
     }
 
@@ -545,7 +568,8 @@ class PKPSubmissionController extends PKPBaseController
         // Anonymize sensitive review assignment data if user is a reviewer or author assigned to the article and review isn't open
         $reviewAssignments = Repo::reviewAssignment()->getCollector()->filterBySubmissionIds([$submission->getId()])->getMany()->remember();
 
-        $anonymizeReviews = $this->anonymizeReviews($submission, $reviewAssignments);
+        $reviewsToAnonymize = $this->reviewsToAnonymize($submission, $reviewAssignments);
+        $submissionsToAnonymizeByAuthor = $this->submissionsToAnonymizeByAuthor($submission, $reviewAssignments);
 
         /** @var GenreDAO $genreDao */
         $genreDao = DAORegistry::getDAO('GenreDAO');
@@ -559,7 +583,10 @@ class PKPSubmissionController extends PKPBaseController
             $reviewAssignments,
             null,
             null,
-            !$anonymizeReviews || $anonymizeReviews->isEmpty() ? false : $anonymizeReviews
+            $reviewsToAnonymize,
+            null,
+            null,
+            $submissionsToAnonymizeByAuthor,
         ), Response::HTTP_OK);
     }
 
@@ -1061,13 +1088,8 @@ class PKPSubmissionController extends PKPBaseController
 
         $userGroups = UserGroup::withContextIds($submission->getData('contextId'))->cursor();
 
-        $currentUserReviewAssignment = Repo::reviewAssignment()->getCollector()
-            ->filterBySubmissionIds([$submission->getId()])
-            ->filterByReviewerIds([$request->getUser()->getId()], true)
-            ->getMany()
-            ->first();
-
-        $anonymize = $currentUserReviewAssignment && $currentUserReviewAssignment->getReviewMethod() === ReviewAssignment::SUBMISSION_REVIEW_METHOD_DOUBLEANONYMOUS;
+        $submissionsToAnonymizeByAuthor = $this->submissionsToAnonymizeByAuthor($submission);
+        $anonymizeAuthors = !empty($submissionsToAnonymizeByAuthor);
 
         /** @var GenreDAO $genreDao */
         $genreDao = DAORegistry::getDAO('GenreDAO');
@@ -1075,7 +1097,11 @@ class PKPSubmissionController extends PKPBaseController
 
         return response()->json([
             'itemsMax' => $collector->getCount(),
-            'items' => Repo::publication()->getSchemaMap($submission, $userGroups, $genres)->summarizeMany($publications, $anonymize)->values(),
+            'items' => Repo::publication()->getSchemaMap($submission, $userGroups, $genres)
+                ->summarizeMany(
+                    $publications,
+                    $anonymizeAuthors,
+                )->values(),
         ], Response::HTTP_OK);
     }
 
@@ -1100,6 +1126,9 @@ class PKPSubmissionController extends PKPBaseController
             ], Response::HTTP_FORBIDDEN);
         }
 
+        $submissionsToAnonymizeByAuthor = $this->submissionsToAnonymizeByAuthor($submission);
+        $anonymizeAuthors = !empty($submissionsToAnonymizeByAuthor);
+
         $userGroups = UserGroup::withContextIds($submission->getData('contextId'))->get();
 
         /** @var GenreDAO $genreDao */
@@ -1107,7 +1136,11 @@ class PKPSubmissionController extends PKPBaseController
         $genres = $genreDao->getByContextId($submission->getData('contextId'))->toAssociativeArray();
 
         return response()->json(
-            Repo::publication()->getSchemaMap($submission, $userGroups, $genres)->map($publication),
+            Repo::publication()->getSchemaMap($submission, $userGroups, $genres)
+                ->map(
+                    $publication,
+                    $anonymizeAuthors,
+                ),
             Response::HTTP_OK
         );
     }
@@ -1135,7 +1168,13 @@ class PKPSubmissionController extends PKPBaseController
         }
 
         $publication = Repo::publication()->newDataObject($params);
-        $newId = Repo::publication()->add($publication);
+        try {
+            $newId = Repo::publication()->add($publication);
+        } catch (StoreTemporaryFileException $e) {
+            return response()->json([
+                'coverImage' => [__('api.400.errorUploadingImage')]
+            ], Response::HTTP_BAD_REQUEST);
+        }
         $publication = Repo::publication()->get($newId);
 
         $userGroups = UserGroup::withContextIds($submission->getData('contextId'))->cursor();
@@ -1265,6 +1304,7 @@ class PKPSubmissionController extends PKPBaseController
 
         $params = $this->convertStringsToSchema(PKPSchemaService::SCHEMA_PUBLICATION, $illuminateRequest->input());
         $params['id'] = $publication->getId();
+        $params['submissionId'] = $submission->getId();
 
         // Don't allow the status to be modified through the API. The `/publish` and /unpublish endpoints
         // should be used instead.
@@ -1285,7 +1325,13 @@ class PKPSubmissionController extends PKPBaseController
             return response()->json($errors, Response::HTTP_BAD_REQUEST);
         }
 
-        Repo::publication()->edit($publication, $params);
+        try {
+            Repo::publication()->edit($publication, $params);
+        } catch (StoreTemporaryFileException $e) {
+            return response()->json([
+                'coverImage' => [__('api.400.errorUploadingImage')]
+            ], Response::HTTP_BAD_REQUEST);
+        }
         $publication = Repo::publication()->get($publication->getId());
         event(new MetadataChanged($submission));
 
@@ -1494,6 +1540,11 @@ class PKPSubmissionController extends PKPBaseController
             ], Response::HTTP_NOT_FOUND);
         }
 
+        $submissionsToAnonymizeByAuthor = $this->submissionsToAnonymizeByAuthor($submission);
+        if (in_array($submission->getId(), $submissionsToAnonymizeByAuthor)) {
+            return response()->json(['error' => __('api.403.unauthorized')], Response::HTTP_FORBIDDEN);
+        }
+
         return response()->json(
             Repo::author()->getSchemaMap($submission)->map($author),
             Response::HTTP_OK
@@ -1518,6 +1569,14 @@ class PKPSubmissionController extends PKPBaseController
             return response()->json([
                 'error' => __('api.publications.403.submissionsDidNotMatch'),
             ], Response::HTTP_FORBIDDEN);
+        }
+
+        $submissionsToAnonymizeByAuthor = $this->submissionsToAnonymizeByAuthor($submission);
+        if (in_array($submission->getId(), $submissionsToAnonymizeByAuthor)) {
+            return response()->json([
+                'itemsMax' => 0,
+                'items' => [],
+            ], Response::HTTP_OK);
         }
 
         $collector = Repo::author()->getCollector()
@@ -1556,6 +1615,11 @@ class PKPSubmissionController extends PKPBaseController
         }
 
         $params = $this->convertStringsToSchema(PKPSchemaService::SCHEMA_AUTHOR, $illuminateRequest->input());
+
+        // Unset ORCID verification and token properties from Author schema
+        foreach ($this->orcidWriteForbiddenProps as $prop) {
+            unset($params[$prop]);
+        }
 
         // Allows author ORCID request email to be triggered from frontend before author ID exists
         $shouldSendOrcidEmail = false;
@@ -1712,6 +1776,7 @@ class PKPSubmissionController extends PKPBaseController
 
         $params = $this->convertStringsToSchema(PKPSchemaService::SCHEMA_AUTHOR, $illuminateRequest->input());
         $params['id'] = $author->getId();
+        $params['publicationId'] = $publication->getId();
 
         $submissionContext = $request->getContext();
         if (!$submissionContext || $submissionContext->getId() !== $submission->getData('contextId')) {
@@ -1749,6 +1814,12 @@ class PKPSubmissionController extends PKPBaseController
 
         $affiliations = $newAffiliationErrors = [];
         foreach ($params['affiliations'] as $position => $affiliationParam) {
+            if ($affiliationParam['authorId'] != $author->getId()) {
+                return response()->json([
+                    'affiliations' => [__('author.authorNotFound')]
+                ], Response::HTTP_BAD_REQUEST);
+            }
+
             $affiliationErrors = Repo::affiliation()->validate(null, $affiliationParam, $submission, $submissionContext);
             // Map errors to the specific affiliation in the UI using the position = index
             if (!empty($affiliationErrors)) {
@@ -1774,7 +1845,9 @@ class PKPSubmissionController extends PKPBaseController
         // Remove ORCID from params because it cannot be set via this endpoint. If there is a desire to update a contributor's
         // ORCiD, the ORCiD should be deleted and an update requested via the `orcid/requestAuthorVerification/{authorId}` endpoint.
         // Validation to prevent editing the ORCID is also done in Repo::author()->validate()
-        unset($params['orcid']);
+        foreach (array_merge($this->orcidWriteForbiddenProps, ['orcid']) as $prop) {
+            unset($params[$prop]);
+        }
 
         Repo::author()->edit($author, $params);
         $author = Repo::author()->get($author->getId());
@@ -1813,7 +1886,7 @@ class PKPSubmissionController extends PKPBaseController
         if (!empty($params['sortedAuthors'])) {
             $authors = [];
             foreach ($params['sortedAuthors'] as $author) {
-                $newAuthor = Repo::author()->get((int) $author['id']);
+                $newAuthor = Repo::author()->get((int) $author['id'], $publication->getId());
 
                 array_push($authors, $newAuthor);
             }

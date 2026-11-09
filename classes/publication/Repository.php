@@ -1,4 +1,5 @@
 <?php
+
 /**
  * @file classes/publication/Repository.php
  *
@@ -29,6 +30,7 @@ use PKP\file\TemporaryFileManager;
 use PKP\log\event\PKPSubmissionEventLogEntry;
 use PKP\observers\events\PublicationPublished;
 use PKP\observers\events\PublicationUnpublished;
+use PKP\core\exceptions\StoreTemporaryFileException;
 use PKP\orcid\OrcidManager;
 use PKP\plugins\Hook;
 use PKP\security\Validation;
@@ -36,6 +38,7 @@ use PKP\services\PKPSchemaService;
 use PKP\submission\Genre;
 use PKP\submission\PKPSubmission;
 use PKP\userGroup\UserGroup;
+use PKP\user\User;
 use PKP\validation\ValidatorFactory;
 
 abstract class Repository
@@ -166,7 +169,6 @@ abstract class Repository
             });
         }
 
-
         // A title must be provided if the submission is not still in progress
         if (!$submission->getData('submissionProgress')) {
             $validator->after(function ($validator) use ($props, $publication, $primaryLocale) {
@@ -222,6 +224,26 @@ abstract class Repository
             $user ? $user->getId() : null
         );
 
+        // A cover image filename may only be one this submission already holds:
+        // the stored value a form sends back, or a version's copy (pkp/pkp-lib#13560)
+        if (isset($props['coverImage'])) {
+            $validator->after(function ($validator) use ($props, $submission) {
+                if (!is_array($props['coverImage'])) {
+                    $validator->errors()->add('coverImage', __('api.400.errorUploadingImage'));
+                    return;
+                }
+                $specifiedUploadNames = collect($props['coverImage'])
+                    ->map(fn($c) => $c['uploadName'] ?? null)
+                    ->filter()->unique();
+                $existingUploadNames = $submission->getData('publications')
+                    ->flatMap(fn($p) => array_map(fn($c) => $c['uploadName'] ?? null, (array) $p->getData('coverImage')))
+                    ->filter()->unique();
+                if ($specifiedUploadNames->diff($existingUploadNames)->count()) {
+                    $validator->errors()->add('coverImage', __('api.400.errorUploadingImage'));
+                }
+            });
+        }
+
         if ($validator->fails()) {
             $errors = $this->schemaService->formatValidationErrors($validator->errors());
         }
@@ -264,24 +286,37 @@ abstract class Repository
             $errors['reviewStage'] = __('publication.required.reviewStage');
         }
 
-        // Orcid errors
+        Hook::call('Publication::validatePublish', [&$errors, $publication, $submission, $allowedLocales, $primaryLocale]);
+
+        return $errors;
+    }
+
+    /**
+     * Perform validations that should be treated as warnings instead of errors.
+     *
+     * @hook Publication::validatePublishWarnings [[&$warnings, $publication, $submission, $allowedLocales, $primaryLocale]]
+     */
+    public function validatePublishWarnings(Publication $publication, Submission $submission, array $allowedLocales, string $primaryLocale): array
+    {
+        $warnings = [];
+
+        // ORCID warnings
         if (OrcidManager::isEnabled()) {
             $orcidIds = [];
             foreach ($publication->getData('authors') as $author) {
                 $authorOrcid = $author->getData('orcid');
                 if ($authorOrcid and in_array($authorOrcid, $orcidIds)) {
-                    $errors['hasDuplicateOrcids'] = __('orcid.verify.duplicateOrcidAuthor');
+                    $warnings['hasDuplicateOrcids'] = __('orcid.verify.duplicateOrcidAuthor');
                 } elseif ($authorOrcid && !$author->getData('orcidAccessToken')) {
-                    $errors['hasUnauthenticatedOrcid'] = __('orcid.verify.hasUnauthenticatedOrcid');
+                    $warnings['hasUnauthenticatedOrcid'] = __('orcid.verify.hasUnauthenticatedOrcid');
                 } else {
                     $orcidIds[] = $authorOrcid;
                 }
             }
         }
 
-        Hook::call('Publication::validatePublish', [&$errors, $publication, $submission, $allowedLocales, $primaryLocale]);
-
-        return $errors;
+        Hook::call('Publication::validatePublishWarnings', [&$warnings, $publication, $submission, $allowedLocales, $primaryLocale]);
+        return $warnings;
     }
 
     /** @copydoc DAO::insert() */
@@ -294,8 +329,6 @@ abstract class Repository
 
         // Move uploaded files into place and update the settings
         if ($publication->getData('coverImage')) {
-            $userId = $this->request->getUser() ? $this->request->getUser()->getId() : null;
-
             $submissionContext = $this->request->getContext();
             if ($submissionContext->getId() !== $submission->getData('contextId')) {
                 $submissionContext = app()->get('context')->get($submission->getData('contextId'));
@@ -306,7 +339,7 @@ abstract class Repository
                 if (!array_key_exists($localeKey, $publication->getData('coverImage'))) {
                     continue;
                 }
-                $value[$localeKey] = $this->_saveFileParam($publication, $submission, $publication->getData('coverImage', $localeKey), 'coverImage', $userId, $localeKey, true);
+                $value[$localeKey] = $this->_saveFileParam($publication, $submission, $publication->getData('coverImage', $localeKey), 'coverImage', $this->request->getUser(), $localeKey, true);
             }
 
             $this->edit($publication, ['coverImage' => $value]);
@@ -400,7 +433,6 @@ abstract class Repository
     public function edit(Publication $publication, array $params): Publication
     {
         $submission = Repo::submission()->get($publication->getData('submissionId'));
-        $userId = $this->request->getUser()?->getId();
 
         // Move uploaded files into place and update the params
         if (array_key_exists('coverImage', $params)) {
@@ -414,7 +446,7 @@ abstract class Repository
                 if (!array_key_exists($localeKey, $params['coverImage'])) {
                     continue;
                 }
-                $params['coverImage'][$localeKey] = $this->_saveFileParam($publication, $submission, $params['coverImage'][$localeKey], 'coverImage', $userId, $localeKey, true);
+                $params['coverImage'][$localeKey] = $this->_saveFileParam($publication, $submission, $params['coverImage'][$localeKey], 'coverImage', $this->request->getUser(), $localeKey, true);
             }
         }
 
@@ -434,7 +466,7 @@ abstract class Repository
             'assocType' => PKPApplication::ASSOC_TYPE_SUBMISSION,
             'assocId' => $submission->getId(),
             'eventType' => PKPSubmissionEventLogEntry::SUBMISSION_LOG_METADATA_UPDATE,
-            'userId' => Validation::loggedInAs() ?? $userId,
+            'userId' => Validation::loggedInAs() ?? $this->request->getUser()->getId(),
             'message' => 'submission.event.general.metadataUpdated',
             'isTranslated' => false,
             'dateLogged' => Core::getCurrentDate(),
@@ -690,7 +722,7 @@ abstract class Repository
         Submission $submission,
         $value,
         string $settingName,
-        int $userId,
+        User $user,
         string $localeKey = '',
         bool $isImage = false
     ) {
@@ -722,7 +754,15 @@ abstract class Repository
 
         // Check if there is something to upload
         if (empty($value['temporaryFileId'])) {
-            return $value;
+            // No new file: Keep the stored file and let only its alt text change.
+            $oldValue = $publication->getData($settingName, $localeKey);
+            if (empty($oldValue['uploadName'])) {
+                return null;
+            }
+            if ($isImage && is_array($value) && array_key_exists('altText', $value)) {
+                $oldValue['altText'] = (string) $value['altText'];
+            }
+            return $oldValue;
         }
 
         // Get the submission context
@@ -732,9 +772,14 @@ abstract class Repository
         }
 
         $temporaryFileManager = new TemporaryFileManager();
-        $temporaryFile = $temporaryFileManager->getFile((int) $value['temporaryFileId'], $userId);
+        $temporaryFile = $temporaryFileManager->getFile((int) $value['temporaryFileId'], $user->getId());
+
         $fileNameBase = join('_', ['submission', $submission->getId(), $publication->getId(), $settingName]); // eg - submission_1_1_coverImage
-        $fileName = app()->get('context')->moveTemporaryFile($submissionContext, $temporaryFile, $fileNameBase, $userId, $localeKey);
+        if (!$temporaryFile || ($isImage && !$temporaryFileManager->getImageExtension($temporaryFile->getFileType()))) {
+            // Temporary file must exist, and if it should be an image, ensure that's the case
+            throw new StoreTemporaryFileException($temporaryFile, $fileNameBase, $user, $publication);
+        }
+        $fileName = app()->get('context')->moveTemporaryFile($submissionContext, $temporaryFile, $fileNameBase, $user, $localeKey, $isImage);
 
         if ($fileName) {
             if ($isImage) {

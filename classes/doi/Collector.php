@@ -31,7 +31,7 @@ class Collector implements CollectorInterface
 
     public ?array $contextIds = null;
 
-    public ?int $count = 30;
+    public ?int $count = null;
 
     public ?int $offset = 0;
 
@@ -136,7 +136,7 @@ class Collector implements CollectorInterface
                 $q->limit($this->count);
             })
             ->when(!empty($this->offset), function (Builder $q) {
-                $q->offset($this->count);
+                $q->offset($this->offset);
             });
 
         Hook::call('Doi::Collector', [&$q, $this]);

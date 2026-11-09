@@ -180,6 +180,7 @@ class PKPContainer extends Container
         $this->register(new LaravelEventServiceProvider($this));
         $this->register(new EventServiceProvider($this));
         $this->register(new LogServiceProvider($this));
+        $this->register(new \Illuminate\Log\Context\ContextServiceProvider($this));
         $this->register(new \Illuminate\Database\DatabaseServiceProvider($this));
         $this->register(new \Illuminate\Bus\BusServiceProvider($this));
         $this->register(new PKPQueueProvider($this));
@@ -315,6 +316,13 @@ class PKPContainer extends Container
                 \Illuminate\Contracts\Routing\Registrar::class,
                 \Illuminate\Contracts\Routing\BindingRegistrar::class
             ],
+            'session' => [
+                \Illuminate\Session\SessionManager::class
+            ],
+            'session.store' => [
+                \Illuminate\Session\Store::class,
+                \Illuminate\Contracts\Session\Session::class
+            ],
             'url' => [
                 \Illuminate\Routing\UrlGenerator::class,
                 \Illuminate\Contracts\Routing\UrlGenerator::class
@@ -357,7 +365,9 @@ class PKPContainer extends Container
         $items['app'] = [
             'key' => PKPAppKey::getKey(),
             'cipher' => PKPAppKey::getCipher(),
-            'timezone' => Config::getVar('general', 'timezone', 'UTC'),
+            // Resolved form PKPApplication::initializeTimeZone() rather than read straight 
+            // from the config to make sure no legacy value set
+            'timezone' => Application::resolveTimeZone(),
             'env' => Config::getVar('general', 'app_env', 'production'),
         ];
 

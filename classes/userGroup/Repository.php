@@ -22,6 +22,7 @@ use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\LazyCollection;
+use PKP\context\Context;
 use PKP\core\Core;
 use PKP\db\DAORegistry;
 use PKP\facades\Locale;
@@ -421,6 +422,29 @@ class Repository
     }
 
     /**
+     * Get the non-reviewer masthead user groups for a context, sorted in the
+     * order saved in the context's mastheadUserGroupIds setting.
+     * New/unordered groups sort last, after those with a saved position, secondarily ordered by role ID.
+     *
+     * @return Collection<int, UserGroup>
+     */
+    public function getSortedMastheadUserGroups(Context $context): Collection
+    {
+        $savedOrder = (array) $context->getData('mastheadUserGroupIds');
+
+        return UserGroup::withContextIds([$context->getId()])
+            ->masthead(true)
+            ->excludeRoleIds([Role::ROLE_ID_REVIEWER])
+            ->orderByRoleId()
+            ->get()
+            ->sortBy(function (UserGroup $userGroup) use ($savedOrder) {
+                $position = array_search($userGroup->id, $savedOrder);
+                return $position === false ? PHP_INT_MAX : $position;
+            })
+            ->keyBy('id');
+    }
+
+    /**
      * Remove a user group from a stage
      *
      */
@@ -584,6 +608,7 @@ class Repository
 
             // Query that gets all users that are or were active in the given masthead roles
             // and that have accepted to be displayed on the masthead for the roles.
+            // Disabled users are included: disabling an account does not remove them from the scholarly record.
             // Sort the results by role ID and user family name.
             $usersCollector = Repo::user()->getCollector();
             $usersQuery = $usersCollector
@@ -591,6 +616,7 @@ class Repository
                 ->filterByUserGroupIds($mastheadRoleIds)
                 ->filterByUserUserGroupStatus($userUserGroupStatus)
                 ->filterByUserMastheadStatus(UserMastheadStatus::STATUS_ON)
+                ->filterByStatus($usersCollector::STATUS_ALL)
                 ->orderBy(
                     $usersCollector::ORDERBY_FAMILYNAME,
                     $usersCollector::ORDER_DIR_ASC,

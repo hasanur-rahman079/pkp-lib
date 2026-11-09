@@ -180,7 +180,7 @@ class LoginHandler extends Handler
             'remember' => $request->getUserVar('remember'),
             'source' => $request->getUserVar('source'),
             'error' => $error,
-            'reason' => $reason,
+            'reason' => htmlspecialchars($reason),
         ]);
 
         $this->_generateAltchaComponent('altcha_on_login', $templateMgr);
@@ -301,7 +301,7 @@ class LoginHandler extends Handler
         $templateMgr = TemplateManager::getManager($request);
         $templateMgr->setupBackendPage();
         $templateMgr->assign([
-            'pageTitle' => 'user.login.resetPassword',
+            'pageTitle' => __('user.login.resetPassword'),
         ]);
 
         $username = $args[0] ?? null;

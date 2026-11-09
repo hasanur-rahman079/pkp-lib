@@ -1,12 +1,13 @@
 # Hüseyin Körpeoğlu <yoruyenturk@hotmail.com>, 2021, 2022, 2023, 2024, 2025.
 # "Dr. Uğur Koçak" <ugurkocak@hotmail.com>, 2025.
+# Mahmut  VURAL <mahmut.vural@outlook.com>, 2026.
 msgid ""
 msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2019-11-19T10:50:08+00:00\n"
-"PO-Revision-Date: 2025-08-17 00:26+0000\n"
-"Last-Translator: Hüseyin Körpeoğlu <yoruyenturk@hotmail.com>\n"
+"PO-Revision-Date: 2026-07-12 16:32+0000\n"
+"Last-Translator: Mahmut  VURAL <mahmut.vural@outlook.com>\n"
 "Language-Team: Turkish <http://translate.pkp.sfu.ca/projects/pkp-lib/"
 "submission/tr/>\n"
 "Language: tr\n"
@@ -3136,6 +3137,7 @@ msgstr "Değerlendirme devam ediyor - Hakemlik daveti kabul edildi"
 msgid "dashboard.reviewAssignment.statusReviewOverdue.title"
 msgstr "Değerlendirme, {$days} gün gecikmiştir."
 
+#, fuzzy
 msgid "dashboard.reviewAssignment.statusReviewOverdue.description"
 msgstr ""
 "Hakem, değerlendirmeyi tamamlamamıştır. <b>{$date}</b> tarihine kadar "
@@ -3156,11 +3158,13 @@ msgid "dashboard.reviewAssignment.statusComplete.description"
 msgstr ""
 "Değerlendirme, editör tarafından <b>{$date}</b> tarihinde onaylanmıştır."
 
+#, fuzzy
 msgid "dashboard.reviewAssignment.statusCancelled.title"
-msgstr "Hakem, hakemlik davetini reddetti"
+msgstr "Editör, hakemlik davetini iptal etti"
 
+#, fuzzy
 msgid "dashboard.reviewAssignment.statusCancelled.description"
-msgstr "Hakemlik davetini <b>{$date}</b> tarihinde reddetti."
+msgstr "Editör, bu hakemlik davetini <b>{$date}</b> tarihinde iptal etti."
 
 msgid "dashboard.reviewAssignment.statusRequestResend.title"
 msgstr "Hakemlik davetine yanıt bekleniyor"
@@ -3189,3 +3193,6 @@ msgstr "Değerlendirme {$date} tarihinde tamamlanmıştır."
 
 msgid "reviewer.competingInterests"
 msgstr "Çıkar Çelişkisi"
+
+msgid "ror.invalidRorId"
+msgstr "Lütfen geçerli bir ROR ID girin."

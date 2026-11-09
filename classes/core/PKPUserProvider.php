@@ -39,14 +39,12 @@ class PKPUserProvider implements UserProvider
      * @param  \Illuminate\Database\ConnectionInterface     $connection The active database connection.
      * @param  \Illuminate\Contracts\Hashing\Hasher         $hasher     The hasher implementation.
      * @param  string                                       $table      The table containing the users.
-     * @return void
      */
     public function __construct(
         protected ConnectionInterface $connection,
         protected HasherContract $hasher,
         protected string $table
-    )
-    {
+    ) {
         $this->connection = $connection;
         $this->table = $table;
         $this->hasher = $hasher;
@@ -54,8 +52,6 @@ class PKPUserProvider implements UserProvider
 
     /**
      * Retrieve a user by their unique identifier.
-     *
-     * @param  mixed  $id
      * @return \Illuminate\Contracts\Auth\Authenticatable|null
      */
     public function retrieveById($id)
@@ -65,15 +61,14 @@ class PKPUserProvider implements UserProvider
             return $user;
         }
 
-        return Repo::user()->get($id);
+        // A disabled account is only resolved for "Login As"
+        return Repo::user()->get($id, Validation::isLoggedInAs());
     }
 
     /**
      * Retrieve a user by their unique identifier and "remember me" token.
      *
-     * @param  mixed    $identifier
      * @param  string   $token
-     * 
      * @return \Illuminate\Contracts\Auth\Authenticatable|null
      */
     public function retrieveByToken($id, $token)
@@ -86,7 +81,7 @@ class PKPUserProvider implements UserProvider
             ->where($authIdentifierName, $id)
             ->first()
             ?->{$authIdentifierName};
-        
+
         if (!$userId) {
             return null;
         }
@@ -94,7 +89,7 @@ class PKPUserProvider implements UserProvider
         $user = Repo::user()->get($userId);
 
         return $user?->getRememberToken() && hash_equals($user?->getRememberToken(), $token)
-            ? $user 
+            ? $user
             : null;
     }
 
@@ -103,23 +98,21 @@ class PKPUserProvider implements UserProvider
      *
      * @param  \Illuminate\Contracts\Auth\Authenticatable|\PKP\user\User  $user
      * @param  string  $token
-     * 
-     * @return void
      */
     public function updateRememberToken(UserContract $user, $token)
     {
-        if ($user->getRememberToken() === $token) {
-            return;
-        }
-
+        // The guard sets the new token on the user before calling this, so always store it
         $user->setRememberToken($token);
-        Repo::user()->edit($user);
+
+        $this->connection
+            ->table($this->table)
+            ->where($user->getAuthIdentifierName(), $user->getAuthIdentifier())
+            ->update([$user->getRememberTokenName() => $token]);
     }
 
     /**
      * Retrieve a user by the given credentials.
      *
-     * @param  array  $credentials
      * @return \Illuminate\Contracts\Auth\Authenticatable|null
      */
     public function retrieveByCredentials(array $credentials)
@@ -144,8 +137,6 @@ class PKPUserProvider implements UserProvider
     /**
      * Validate a user against the given credentials.
      *
-     * @param  \Illuminate\Contracts\Auth\Authenticatable  $user
-     * @param  array  $credentials
      * @return bool
      */
     public function validateCredentials(UserContract $user, array $credentials)
@@ -159,11 +150,6 @@ class PKPUserProvider implements UserProvider
 
     /**
      * Rehash the user's password if required and supported.
-     *
-     * @param  \Illuminate\Contracts\Auth\Authenticatable|\PKP\user\User  $user
-     * @param  array  $credentials
-     * @param  bool  $force
-     * @return void
      */
     public function rehashPasswordIfRequired(UserContract $user, #[\SensitiveParameter] array $credentials, bool $force = false)
     {
@@ -179,18 +165,14 @@ class PKPUserProvider implements UserProvider
 
     /**
      * Create a new instance of the \PKP\user\User
-     * 
-     * @return \PKP\user\User
      */
     public function createUserInstance(): User
     {
-        return new User;
+        return new User();
     }
 
     /**
      * Gets the hasher implementation.
-     *
-     * @return \Illuminate\Contracts\Hashing\Hasher
      */
     public function getHasher(): HasherContract
     {
